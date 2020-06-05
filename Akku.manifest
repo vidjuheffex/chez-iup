@@ -1,0 +1,9 @@
+#!r6rs ; -*- mode: scheme; coding: utf-8 -*-
+(import (akku format manifest))
+
+(akku-package ("chez-iup" "1.0.0-alpha.0")
+  (synopsis "Chez Bindings for the Iup GUI Library")
+  (authors "Julian Herrera")
+  (license "MIT")
+  (depends ("chez-srfi" ">=0.0.0-akku <1.0.0"))
+)
