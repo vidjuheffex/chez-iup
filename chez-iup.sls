@@ -32,7 +32,7 @@
    iup-execute
    iup-execute-wait
    iup-help
-   ;; iup-log
+   iup-log
 
    iup-load
    iup-load-buffer
@@ -131,7 +131,7 @@
    iup-next-field
 
    ;; iup-get-callback
-   ;; iup-set-callback
+   iup-set-callback
    ;; iup-set-callbacks
 
    ;; iup-get-function
@@ -330,74 +330,74 @@
    IUP_TOP
    IUP_BOTTOM
 
-     ;; SHOW_CB Callback Values
-  IUP_SHOW 
-  IUP_RESTORE 
-  IUP_MINIMIZE 
-  IUP_MAXIMIZE 
-  IUP_HIDE 
+   ;; SHOW_CB Callback Values
+   IUP_SHOW 
+   IUP_RESTORE 
+   IUP_MINIMIZE 
+   IUP_MAXIMIZE 
+   IUP_HIDE 
 
-  ;; SCROLL_CB Callback Values
+   ;; SCROLL_CB Callback Values
 
-  IUP_SBUP 
-  IUP_SBDN 
-  IUP_SBPGUP 
-  IUP_SBPGDN 
-  IUP_SBPOSV 
-  IUP_SBDRAGV 
-  IUP_SBLEFT 
-  IUP_SBRIGHT 
-  IUP_SBPGLEFT 
-  IUP_SBPGRIGHT 
-  IUP_SBPOSH 
-  IUP_SBDRAGH 
-  
+   IUP_SBUP 
+   IUP_SBDN 
+   IUP_SBPGUP 
+   IUP_SBPGDN 
+   IUP_SBPOSV 
+   IUP_SBDRAGV 
+   IUP_SBLEFT 
+   IUP_SBRIGHT 
+   IUP_SBPGLEFT 
+   IUP_SBPGRIGHT 
+   IUP_SBPOSH 
+   IUP_SBDRAGH 
+   
 
-  ;; Mouse Button Values and Macros
+   ;; Mouse Button Values and Macros
 
-  IUP_BUTTON1 
-  IUP_BUTTON2 
-  IUP_BUTTON3 
-  IUP_BUTTON4 
-  IUP_BUTTON5
+   IUP_BUTTON1 
+   IUP_BUTTON2 
+   IUP_BUTTON3 
+   IUP_BUTTON4 
+   IUP_BUTTON5
 
-  ;; Predefined Masks
-  IUP_MASK_FLOAT
-  IUP_MASK_UFLOAT
-  IUP_MASK_EFLOAT
-  IUP_MASK_UEFLOAT
-  IUP_MASK_FLOATCOMMA
-  IUP_MASK_UFLOATCOMMA
-  IUP_MASK_INT
-  IUP_MASK_UINT
+   ;; Predefined Masks
+   IUP_MASK_FLOAT
+   IUP_MASK_UFLOAT
+   IUP_MASK_EFLOAT
+   IUP_MASK_UEFLOAT
+   IUP_MASK_FLOATCOMMA
+   IUP_MASK_UFLOATCOMMA
+   IUP_MASK_INT
+   IUP_MASK_UINT
 
-;; /* Old definitions for backward compatibility */
-  IUPMASK_FLOAT
-  IUPMASK_UFLOAT
-  IUPMASK_EFLOAT
-  IUPMASK_INT
-  IUPMASK_UINT
+   ;; /* Old definitions for backward compatibility */
+   IUPMASK_FLOAT
+   IUPMASK_UFLOAT
+   IUPMASK_EFLOAT
+   IUPMASK_INT
+   IUPMASK_UINT
 
 
-  ;; Iup GetParam Callback Situations
-  IUP_GETPARAM_BUTTON1
-  IUP_GETPARAM_INIT   
-  IUP_GETPARAM_BUTTON2
-  IUP_GETPARAM_BUTTON3
-  IUP_GETPARAM_CLOSE  
-  IUP_GETPARAM_MAP    
-  IUP_GETPARAM_OK     
-  IUP_GETPARAM_CANCEL 
-  IUP_GETPARAM_HELP
+   ;; Iup GetParam Callback Situations
+   IUP_GETPARAM_BUTTON1
+   IUP_GETPARAM_INIT   
+   IUP_GETPARAM_BUTTON2
+   IUP_GETPARAM_BUTTON3
+   IUP_GETPARAM_CLOSE  
+   IUP_GETPARAM_MAP    
+   IUP_GETPARAM_OK     
+   IUP_GETPARAM_CANCEL 
+   IUP_GETPARAM_HELP
 
-  ;; Use by IupColorBar
-  IUP_PRIMARY
-  IUP_SECONDARY
+   ;; Use by IupColorBar
+   IUP_PRIMARY
+   IUP_SECONDARY
 
-  ;; Record Input Modes
-  IUP_RECBINARY
-  IUP_RECTEXT
-  )
+   ;; Record Input Modes
+   IUP_RECBINARY
+   IUP_RECTEXT
+   )
   (import (chezscheme))
   
   (define lib-iup (load-shared-object "libiup.so"))
@@ -408,6 +408,12 @@
       ((_ ret name fpname args)
        (define name
          (foreign-procedure (symbol->string 'fpname) args ret)))))
+
+  (define-syntax define-gc-safe-function
+    (syntax-rules ()
+      ((_ ret name fpname args)
+       (define name
+         (foreign-procedure __collect_safe (symbol->string 'fpname) args ret)))))
 
   (define create-list
     (lambda (element n)
@@ -420,37 +426,68 @@
         (helper '() element n))))
 
   (define-syntax
+    define-v-function
+    (lambda (x)
+      (syntax-case x ()
+        ((_ ret name fpname fatype)
+         (syntax
+          (define-syntax
+            name
+            (lambda (x)
+              (syntax-case x ()
+                ((_ cmd (... ...))
+                 (with-syntax     
+                     ((system-call-spec
+                       (syntax
+                        (create-list 'fatype
+                                     (length (syntax (cmd (... ...))))))))
+                   (with-syntax
+                       ((proc (syntax
+                               (eval
+                                `(foreign-procedure
+                                  (symbol->string 'fpname)
+                                  (,@system-call-spec) ret)))))
+                     (syntax
+                      (proc cmd (... ...))))))))))))))
+
+  (define-syntax
     define-ntv-function
     (lambda (x)
       (syntax-case x ()
-        ((_ ret name fpname)
-         (syntax (define-syntax name
-                   (lambda (x)
-                     (let ([new-x (append (syntax->list x) (list (syntax 0)))])
-                       (syntax-case new-x ()
-                         ((_ cmd (... ...))
-                          (with-syntax     
-                              ((system-call-spec
-                                (syntax
-                                 (create-list 'void*
-                                              (length (syntax (cmd (... ...))))))))
-                            (with-syntax
-                                ((proc (syntax
-                                        (eval
-                                         `(foreign-procedure (symbol->string 'fpname)
-                                                             (,@system-call-spec) ret)))))
-                              (syntax
-                               (proc cmd (... ...)))))))))))))))
+        ((_ ret name fpname fatype)
+         (syntax
+          (define-syntax
+            name
+            (lambda (x)
+              (let ([new-x (append (syntax->list x) (list (syntax 0)))])
+                (syntax-case new-x ()
+                  ((_ cmd (... ...))
+                   (with-syntax     
+                       ((system-call-spec
+                         (syntax
+                          (create-list 'fatype
+                                       (length (syntax (cmd (... ...))))))))
+                     (with-syntax
+                         ((proc (syntax
+                                 (eval
+                                  `(foreign-procedure
+                                    (symbol->string 'fpname)
+                                    (,@system-call-spec) ret)))))
+                       (syntax
+                        (proc cmd (... ...)))))))))))))))
 
 
   ;;Main API
-  (define-function int iup-open IupOpen (int string))
+  (define-function int %iup-open IupOpen (int string))
+  (define (iup-open . args)
+    ;;TODO pass args to iup open if present
+    (%iup-open 0 ""))
   (define-function void iup-close IupClose ())
   (define-function int iup-is-opened? IupIsOpened ())
 
   (define-function void iup-image-lib-open IupImageLibOpen ())
 
-  (define-function int iup-main-loop IupMainLoop ())
+  (define-gc-safe-function int iup-main-loop IupMainLoop ())
   (define-function int iup-loop-step IupLoopStep ())
   (define-function int iup-loop-step-wait IupLoopStepWait ())
   (define-function int iup-main-loop-level IupMainLoopLevel ())
@@ -458,7 +495,7 @@
   (define-function void iup-exit-loop IupExitLoop ())
   (define-function void iup-post-message IupPostMessage (void* string int double void*))
 
-  
+
   (define-function int iup-record-input IupRecordInput (string int))
   (define-function int iup-play-input IupPlayInput (string))
 
@@ -471,8 +508,8 @@
   (define-function int iup-execute IupExecute (string string))
   (define-function int iup-execute-wait IupExecuteWait (string string))
   (define-function int iup-help IupHelp (string))
-  ;; TODO
-  ;;(define-function void iup-log IupLog(const char* type, const char* format, ...)
+  ;; Behaves more like LUA-api
+  (define-function void iup-log IupLog (string string))
 
   (define-function string iup-load IupLoad (string))
   (define-function string iup-load-buffer IupLoadBuffer (string))
@@ -481,7 +518,7 @@
   (define-function string iup-version-date IupVersionDate ())
   (define-function int iup-version-number IupVersionNumber ())
   (define-function void iup-version-show IupVersionShow ())
-  
+
   (define-function void iup-set-language IupSetLanguage (string))                             
   (define-function string iup-get-language IupGetLanguage ())
   (define-function void iup-set-language-string IupSetLanguageString (string string))
@@ -550,7 +587,7 @@
   (define-function float iup-get-float-id IupGetFloatId (void* string int))
   (define-function double iup-get-double-id IupGetDoubleId (void* string int))
   (define-function void iup-get-rgb-id IupGetRGBId (void* string int  char char char))
-  
+
   (define-function void iup-set-attribute-id2 IupSetAttributeId2 (void* string int int string))
   (define-function void iup-set-str-attribute-id2 IupSetStrAttributeId2 (void* string int int string))
   ;; TODO
@@ -577,7 +614,14 @@
 
   ;; TODO
   ;;(define-function Icallback IupGetCallback (Ihandle* ih, const char *name))
-  ;;(define-function Icallback IupSetCallback (Ihandle* ih, const char *name, Icallback func))
+  (define-function void* %iup-set-callback IupSetCallback (void* string void*))
+  (define (iup-set-callback ihandle name cb)
+    (let ([fcb (case name
+                 ["ACTION" (foreign-callable __collect_safe cb (void*) void)]
+                 ["FILE_CB" (foreign-callable __collect_safe cb (void* string string) void)]
+                 [else (foreign-callable __collect_safe cb (void*) void)])])
+      (lock-object fcb)
+      (%iup-set-callback ihandle name (foreign-callable-entry-point fcb))))
   ;; IUP_API Ihandle*  IupSetCallbacks(Ihandle* ih, const char *name, Icallback func, ...))
 
   ;; TODO
@@ -614,30 +658,30 @@
   ;; IUP_API Ihandle*  IupCreatep(const char *classname, void* first, ...))
 
   ;; Elements
-  
+
   (define-function void* iup-fill IupFill ())
   (define-function void* iup-space IupSpace ())
 
   (define-function void* iup-radio IupRadio (void*))
-  (define-ntv-function void* iup-vbox IupVbox)
+  (define-ntv-function void* iup-vbox IupVbox void*)
   (define-function void* iup-vboxv IupVboxv (void*))
-  (define-ntv-function void* iup-zbox IupZbox)
+  (define-ntv-function void* iup-zbox IupZbox void*)
   (define-function void* iup-zboxv IupZboxv (void*))
-  (define-ntv-function void* iup-hbox IupHbox)
+  (define-ntv-function void* iup-hbox IupHbox void*)
   (define-function void* iup-hboxv IupHboxv (void*))
 
-  (define-ntv-function void* iup-normalizer IupNormalizer)
+  (define-ntv-function void* iup-normalizer IupNormalizer void*)
   (define-function void* iup-normalizerv IupNormalizerv (void*))
 
-  (define-ntv-function void* iup-cbox IupCbox)
+  (define-ntv-function void* iup-cbox IupCbox void*)
   (define-function void* iup-cboxv  IupCboxv (void*))
   (define-function void* iup-sbox  IupSbox (void*))
   (define-function void*  iup-split IupSplit (void* void*))
   (define-function void*  iup-scroll-box IupScrollBox  (void*))
   (define-function void*  iup-flat-scroll-box IupFlatScrollBox (void*))
-  (define-ntv-function void*  iup-grid-box IupGridBox)
+  (define-ntv-function void*  iup-grid-box IupGridBox void*)
   (define-function void*  iup-grid-boxv IupGridBoxv   (void*))
-  (define-ntv-function void* iup-multi-box IupMultiBox)
+  (define-ntv-function void* iup-multi-box IupMultiBox void*)
   (define-function  void* iup-multi-boxv IupMultiBoxv (void*))
   (define-function void* iup-expander IupExpander (void*))
   (define-function void* iup-detach-box IupDetachBox (void*))
@@ -645,19 +689,20 @@
 
   (define-function void* iup-frame  IupFrame (void*))
   (define-function void* iup-flat-frame IupFlatFrame (void*))
-  
+
   (define-function void* iup-image IupImage (int int string))
   (define-function void* iup-image-rgb IupImageRGB (int int string))
   (define-function void* iup-image-rgba IupImageRGBA (int int string))
 
-  (define-function void* iup-item IupItem (string string))
+  (define-function void* %iup-item IupItem (string ptr))
+  (define (iup-item title) (%iup-item title 0))
   (define-function void* iup-submenu IupSubmenu (string void*))
   (define-function void* iup-separator IupSeparator ())
-  (define-ntv-function void* iup-menu IupMenu)
+  (define-ntv-function void* iup-menu IupMenu void*)
   (define-function void* iup-menuv IupMenuv (void*))
-  
 
-  (define-function void* iup-button IupButton (string string))
+  (define-function void* %iup-button IupButton (string ptr))
+  (define (iup-button title) (%iup-button title 0))
   (define-function void* iup-flat-button IupFlatButton (string))
   (define-function void* iup-flat-toggle IupFlatToggle (string))
   (define-function void* iup-drop-button IupDropButton (void*))
@@ -667,7 +712,9 @@
   (define-function void* iup-dialog IupDialog (void*))
   (define-function void* iup-user IupUser ())
   (define-function void* iup-thread IupThread ())
-  (define-function void* iup-label IupLabel (string))
+  (define-function void* %iup-label IupLabel (string))
+  (define (iup-label . args)
+    (%iup-label (if (null? args) 0 (car args))))
   (define-function void* iup-list IupList (string))
   (define-function void* iup-flat-list IupFlatList ())
   (define-function void* iup-text IupText (string))
@@ -678,9 +725,9 @@
   (define-function void* iup-progress-bar IupProgressBar())
   (define-function void* iup-val IupVal (string))
   (define-function void* iup-flat-val IupFlatVal (string))
-  (define-ntv-function void* iup-tabs IupTabs)
+  (define-ntv-function void* iup-tabs IupTabs void*)
   (define-function void* iup-tabsv IupTabsv (void*))
-  (define-ntv-function void* iup-flat-tabs IupFlatTabs)
+  (define-ntv-function void* iup-flat-tabs IupFlatTabs void*)
   (define-function void* iup-flat-tabsv IupFlatTabsv (void*))
   (define-function void* iup-tree IupTree ())
   (define-function void* iup-link IupLink (string string))
@@ -701,11 +748,11 @@
   ;; String compare utility
   (define-function int iup-string-compare IupStringCompare (string string int int))
 
-   ;; IupImage utilities
+  ;; IupImage utilities
   (define-function int iup-save-image-as-text IupSaveImageAsText (void* string string string))
   (define-function void* iup-image-get-handle IupImageGetHandle (string))
 
-   ;; IupText and IupScintilla utilities
+  ;; IupText and IupScintilla utilities
   (define-function void iup-text-convert-lin-col-to-pos IupTextConvertLinColToPos (void* int int int))
   (define-function void iup-text-convert-pos-to-lin-col IupTextConvertPosToLinCol (void* int int int))
 
@@ -724,20 +771,20 @@
   ;; TODO
   ;; IUP_API void IupSetfAttributeId2(Ihandle* ih, const char* name, int lin, int col, const char* format, ...);
 
-   ;; IupTree utilities 
+  ;; IupTree utilities 
   (define-function int iup-tree-set-user-id IupTreeSetUserId(void* int void*))
   (define-function void* iup-tree-get-user-id IupTreeGetUserId(void* int))
   (define-function int iup-tree-get-id IupTreeGetId(void* void*))
   (define-function void iup-tree-set-attribute-handle IupTreeSetAttributeHandle(void* string int void*)) ;  deprecated, use IupSetAttributeHandleId
-  
+
   ;; Pre-defined dialogs
-    
+
   (define-function void* iup-file-dlg IupFileDlg ())
   (define-function void* iup-message-dlg IupMessageDlg ())
   (define-function void* iup-color-dlg IupColorDlg ())
   (define-function void* iup-font-flg IupFontDlg ())
   (define-function void* iup-progress-dlg IupProgressDlg ())
-  
+
   (define-function int  iup-get-file IupGetFile(string))
   (define-function void iup-message IupMessage(string string))
   ;;TODO
@@ -751,15 +798,15 @@
   ;;                  int op, int max_col, int max_lin, int* marks);
   (define-function int iup-get-text IupGetText (string string int))
   (define-function int  iup-get-color IupGetColor (int int char char char))
-  
+
   ;; TODO
   ;;typedef int (*Iparamcb)(Ihandle* dialog, int param_index, void* user_data);
   ;;(define-function  int IupGetParam(const char* title, Iparamcb action, void* user_data, const char* format,...);
   ;;(define-function  int IupGetParamv(const char* title, Iparamcb action, void* user_data, const char* format, int param_count, int param_extra, void** param_data);
   (define-function  void* iup-param  IupParam(string))
-  (define-ntv-function  void* iup-param-box IupParamBox)
+  (define-ntv-function  void* iup-param-box IupParamBox void*)
   (define-function void*  iup-param-boxv IupParamBoxv(void*))
-  
+
   (define-function void* iup-layout-dialog  IupLayoutDialog(void*))
   (define-function void* iup-element-properties-dialog IupElementPropertiesDialog(void* void*))
   (define-function void* iup-globals-dialog IupGlobalsDialog())
@@ -772,15 +819,15 @@
   (define IUP_OPENED -1)
   (define IUP_INVALID -1)
   (define IUP_INVALID_ID -10)
-  
+
   ;; callback return values
 
   (define IUP_IGNORE -1)
   (define IUP_DEFAULT -2)
   (define IUP_CLOSE -3)
   (define IUP_CONTINUE -4)
-  
-  
+
+
   ;; IupPopup and IupShowXY Parameter Values
   (define IUP_CENTER #xFFFF)
   (define IUP_LEFT #xFFFE)
@@ -812,7 +859,7 @@
   (define IUP_SBPGRIGHT 9)
   (define IUP_SBPOSH 10)
   (define IUP_SBDRAGH 11)
-  
+
 
   ;; Mouse Button Values and Macros
 
@@ -823,18 +870,18 @@
   (define IUP_BUTTON5 "5")
 
   ;; TODO
-;;   #define iup_isshift(_s)    (_s[0]=='S')
-;; #define iup_iscontrol(_s)  (_s[1]=='C')
-;; #define iup_isbutton1(_s)  (_s[2]=='1')
-;; #define iup_isbutton2(_s)  (_s[3]=='2')
-;; #define iup_isbutton3(_s)  (_s[4]=='3')
-;; #define iup_isdouble(_s)   (_s[5]=='D')
-;; #define iup_isalt(_s)      (_s[6]=='A')
-;; #define iup_issys(_s)      (_s[7]=='Y')
-;; #define iup_isbutton4(_s)  (_s[8]=='4')
-;; #define iup_isbutton5(_s)  (_s[9]=='5')
+  ;;   #define iup_isshift(_s)    (_s[0]=='S')
+  ;; #define iup_iscontrol(_s)  (_s[1]=='C')
+  ;; #define iup_isbutton1(_s)  (_s[2]=='1')
+  ;; #define iup_isbutton2(_s)  (_s[3]=='2')
+  ;; #define iup_isbutton3(_s)  (_s[4]=='3')
+  ;; #define iup_isdouble(_s)   (_s[5]=='D')
+  ;; #define iup_isalt(_s)      (_s[6]=='A')
+  ;; #define iup_issys(_s)      (_s[7]=='Y')
+  ;; #define iup_isbutton4(_s)  (_s[8]=='4')
+  ;; #define iup_isbutton5(_s)  (_s[9]=='5')
 
-;; Predefined Masks
+  ;; Predefined Masks
   (define IUP_MASK_FLOAT "[+/-]?(/d+/.?/d*|/./d+)")
   (define IUP_MASK_UFLOAT "(/d+/.?/d*|/./d+)")
   (define IUP_MASK_EFLOAT "[+/-]?(/d+/.?/d*|/./d+)([eE][+/-]?/d+)?")
@@ -844,7 +891,7 @@
   (define IUP_MASK_INT "[+/-]?/d+")
   (define IUP_MASK_UINT "/d+")
 
-;; /* Old definitions for backward compatibility */
+  ;; /* Old definitions for backward compatibility */
   (define IUPMASK_FLOAT IUP_MASK_FLOAT)
   (define IUPMASK_UFLOAT IUP_MASK_UFLOAT)
   (define IUPMASK_EFLOAT IUP_MASK_EFLOAT)
@@ -871,3 +918,4 @@
   (define IUP_RECBINARY 0)
   (define IUP_RECTEXT 1)  
   )
+
